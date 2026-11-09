@@ -55,8 +55,8 @@ export function Icon({ name, className = 'size-5', filled = false }: { name: Ico
 type Variant = 'primary' | 'secondary' | 'ghost'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white shadow-sm hover:bg-brand-700 disabled:bg-brand-600/50',
-  secondary: 'border border-line bg-surface text-ink-1 hover:bg-canvas disabled:opacity-50',
+  primary: 'bg-brand-600 font-bold text-on-brand shadow-sm hover:bg-brand-800 disabled:bg-brand-600/50',
+  secondary: 'border border-line bg-surface text-ink-1 hover:bg-surface-2 disabled:opacity-50',
   ghost: 'text-ink-2 hover:bg-ink-1/5 disabled:opacity-40',
 }
 
@@ -84,16 +84,16 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
 type Tone = 'neutral' | 'brand' | 'warn' | 'good' | 'bad'
 
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-ink-1/5 text-ink-2',
-  brand: 'bg-brand-50 text-brand-700 ring-1 ring-brand-100',
-  warn: 'bg-amber-50 text-amber-800 ring-1 ring-amber-100',
+  neutral: 'bg-surface-2 text-ink-2',
+  brand: 'bg-brand-50 text-brand-800',
+  warn: 'bg-warn-soft text-warn',
   good: 'bg-good-soft text-good',
   bad: 'bg-bad-soft text-bad',
 }
 
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${TONES[tone]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONES[tone]}`}>
       {children}
     </span>
   )
@@ -119,7 +119,7 @@ export function EmptyState({
 }) {
   return (
     <Card className="flex flex-col items-center px-6 py-14 text-center">
-      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand-600">
+      <div className="mb-4 grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand-700">
         <Icon name={icon} className="size-6" />
       </div>
       <h2 className="text-lg font-bold text-ink-1">{title}</h2>

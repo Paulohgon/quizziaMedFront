@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api, pct, type Summary } from '../api'
 import { useAuth } from '../auth'
@@ -25,13 +25,27 @@ const LINKS: NavItem[] = [
   { to: '/simulado', label: 'Simulado', short: 'Simulado', icon: 'timer' },
 ]
 
+/** Marca: o Q de quiz com a cruz médica no canto. */
+export function LogoMark({ className = 'size-9', tone = 'theme' }: { className?: string; tone?: 'theme' | 'panel' }) {
+  const bg = tone === 'panel' ? '#14A383' : 'var(--color-logo)'
+  const cross = tone === 'panel' ? '#B8F5DD' : 'var(--color-logo-cross)'
+  return (
+    <svg viewBox="0 0 40 40" className={`shrink-0 ${className}`} aria-hidden="true">
+      <rect width="40" height="40" rx="11" fill={bg} />
+      <circle cx="18" cy="19" r="8.6" fill="none" stroke="#FFFFFF" strokeWidth="3.6" />
+      <path d="M22.5 23.5 28.5 29.5" stroke="#FFFFFF" strokeWidth="3.6" strokeLinecap="round" />
+      <path d="M31 6v6M28 9h6" stroke={cross} strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function Logo() {
   return (
-    <span className="inline-flex items-center gap-2 font-display text-xl font-extrabold tracking-tight text-ink-1">
-      <span className="grid size-8 place-items-center rounded-xl bg-brand-600 text-white shadow-sm">
-        <Icon name="sparkle" className="size-4" />
+    <span className="inline-flex items-center gap-2.5 font-display text-[19px] leading-none tracking-tight">
+      <LogoMark />
+      <span>
+        <span className="font-extrabold text-ink-1">Quizzia</span> <span className="font-semibold text-brand-700">Med</span>
       </span>
-      medingo
     </span>
   )
 }
@@ -39,7 +53,7 @@ export function Logo() {
 function ReviewCount({ summary }: { summary?: Summary }) {
   if (!summary?.reviews_due) return null
   return (
-    <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
+    <span className="ml-auto grid h-5 min-w-[22px] place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-on-brand">
       {summary.reviews_due}
     </span>
   )
@@ -60,31 +74,31 @@ function GoalWidget({ summary }: { summary: Summary }) {
   const done = summary.today_answered >= summary.daily_goal
 
   return (
-    <div className="rounded-xl border border-line p-3">
+    <div className="rounded-[14px] bg-surface-2 p-3.5">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold tracking-wide text-ink-3 uppercase">Meta de hoje</p>
+        <p className="text-[11px] font-semibold tracking-[0.06em] text-ink-3 uppercase">Meta de hoje</p>
         <span
           title={`Melhor sequência: ${summary.best_streak_days} dia(s)`}
           className={`inline-flex items-center gap-1 text-xs font-bold ${
-            summary.studied_today ? 'text-orange-600' : 'text-ink-3'
+            summary.studied_today ? 'text-warn' : 'text-ink-3'
           }`}
         >
           <Icon name="flame" filled={summary.studied_today} className="size-4" />
           {summary.streak_days} {summary.streak_days === 1 ? 'dia' : 'dias'}
         </span>
       </div>
-      <p className="mt-1 text-sm">
-        <strong className="font-display text-lg">{summary.today_answered}</strong>
+      <p className="mt-2 text-[13px]">
+        <strong className="font-display text-xl text-ink-1">{summary.today_answered}</strong>
         <span className="text-ink-3"> / {summary.daily_goal} questões</span>
       </p>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
         <div
-          className={`h-full rounded-full transition-all ${done ? 'bg-good' : 'bg-brand-500'}`}
+          className={`h-full rounded-full transition-all ${done ? 'bg-good' : 'bg-brand-600'}`}
           style={{ width: `${Math.min(100, pct(summary.today_answered, summary.daily_goal))}%` }}
         />
       </div>
       {!summary.studied_today && summary.streak_days > 0 && (
-        <p className="mt-1.5 text-[11px] text-orange-700">Responda uma questão hoje para manter a sequência.</p>
+        <p className="mt-1.5 text-[11px] text-warn">Responda uma questão hoje para manter a sequência.</p>
       )}
       {editing ? (
         <form
@@ -111,7 +125,7 @@ function GoalWidget({ summary }: { summary: Summary }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="mt-1.5 text-[11px] font-semibold text-ink-3 hover:text-ink-1"
+          className="mt-1 -mb-2 py-2 text-xs font-semibold text-ink-3 hover:text-ink-1"
         >
           {done ? 'Meta batida! Ajustar meta' : 'Ajustar meta'}
         </button>
@@ -137,30 +151,32 @@ export function Layout() {
         <div className="px-2">
           <Logo />
         </div>
-        <nav className="mt-8 flex flex-1 flex-col gap-1">
+        <nav aria-label="Principal" className="mt-7 flex flex-1 flex-col gap-0.5">
           {LINKS.map((l) => (
-            <NavLink
-              key={l.to}
-              to={l.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  isActive ? 'bg-brand-50 text-brand-800' : 'text-ink-2 hover:bg-ink-1/5'
-                }`
-              }
-            >
-              <Icon name={l.icon} />
-              {l.label}
-              {l.to === '/revisao' && <ReviewCount summary={summary} />}
-            </NavLink>
+            <Fragment key={l.to}>
+              {l.to === '/provas' && <div className="mx-3 my-2.5 h-px bg-line" />}
+              <NavLink
+                to={l.to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm transition ${
+                    isActive ? 'bg-brand-50 font-semibold text-brand-800' : 'font-medium text-ink-2 hover:bg-surface-2'
+                  }`
+                }
+              >
+                <Icon name={l.icon} className="size-[18px]" />
+                {l.label}
+                {l.to === '/revisao' && <ReviewCount summary={summary} />}
+              </NavLink>
+            </Fragment>
           ))}
         </nav>
         {summary && (
-          <div className="mb-3">
+          <div className="mt-6 mb-3">
             <GoalWidget key={summary.daily_goal} summary={summary} />
           </div>
         )}
-        <div className="flex items-center gap-3 rounded-xl border border-line p-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-sm font-bold text-brand-800">
+        <div className="flex items-center gap-2.5 p-2">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-[13px] font-bold text-brand-800">
             {initials}
           </span>
           <div className="min-w-0 flex-1">
@@ -171,7 +187,8 @@ export function Layout() {
             type="button"
             onClick={logout}
             title="Sair"
-            className="rounded-lg p-1.5 text-ink-3 hover:bg-ink-1/5 hover:text-ink-1"
+            aria-label="Sair"
+            className="grid size-9 place-items-center rounded-[10px] text-ink-3 hover:bg-surface-2 hover:text-ink-1"
           >
             <Icon name="logout" className="size-4" />
           </button>
@@ -186,7 +203,7 @@ export function Layout() {
             <span className={summary.today_answered >= summary.daily_goal ? 'text-good' : 'text-ink-2'}>
               {summary.today_answered}/{summary.daily_goal} hoje
             </span>
-            <span className={`inline-flex items-center gap-1 ${summary.studied_today ? 'text-orange-600' : 'text-ink-3'}`}>
+            <span className={`inline-flex items-center gap-1 ${summary.studied_today ? 'text-warn' : 'text-ink-3'}`}>
               <Icon name="flame" filled={summary.studied_today} className="size-4" />
               {summary.streak_days}
             </span>
@@ -199,19 +216,19 @@ export function Layout() {
       </main>
 
       {/* Navegação inferior (celular) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <nav className="mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         {LINKS.filter((l) => l.mobile).map((l) => (
           <NavLink
             key={l.to}
             to={l.to}
             className={({ isActive }) =>
-              `relative flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${isActive ? 'text-brand-700' : 'text-ink-3'}`
+              `relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${isActive ? 'text-brand-700' : 'text-ink-3'}`
             }
           >
             <Icon name={l.icon} className="size-5" />
             {l.short}
             {l.to === '/revisao' && !!summary?.reviews_due && (
-              <span className="absolute top-1 right-[calc(50%-18px)] grid min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-white">
+              <span className="absolute top-1 right-[calc(50%-18px)] grid min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-on-brand">
                 {summary.reviews_due}
               </span>
             )}
@@ -220,7 +237,7 @@ export function Layout() {
         <button
           type="button"
           onClick={() => setMoreOpen(true)}
-          className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-ink-3"
+          className="flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-ink-3"
         >
           <Icon name="more" className="size-5" />
           Mais
@@ -229,7 +246,7 @@ export function Layout() {
 
       {moreOpen && (
         <div className="fixed inset-0 z-50 flex items-end lg:hidden">
-          <button type="button" aria-label="Fechar" onClick={() => setMoreOpen(false)} className="absolute inset-0 bg-ink-1/30" />
+          <button type="button" aria-label="Fechar" onClick={() => setMoreOpen(false)} className="absolute inset-0 bg-black/40" />
           <div className="relative w-full rounded-t-2xl bg-surface p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl">
             {summary && (
               <div className="mb-3">

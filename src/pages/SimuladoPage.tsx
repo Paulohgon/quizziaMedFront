@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, formatDuration, SECONDS_PER_QUESTION, type ExamProgress } from '../api'
+import { api, formatDuration, newKey, SECONDS_PER_QUESTION, type ExamProgress } from '../api'
 import { AttemptHistory } from '../components/AttemptHistory'
 import { ExamRunner } from '../components/ExamRunner'
 import { FilterPanel } from '../components/FilterPanel'
@@ -35,7 +35,7 @@ export function SimuladoPage() {
     },
     onSuccess: (data) => {
       if (!data.items.length) return
-      const saved = { questions: data.items, timeLimitS: timed ? data.items.length * SECONDS_PER_QUESTION : null }
+      const saved = { questions: data.items, timeLimitS: timed ? data.items.length * SECONDS_PER_QUESTION : null, key: newKey() }
       startSimulado(saved)
       setRun({ ...saved, progress: null })
     },
@@ -49,6 +49,7 @@ export function SimuladoPage() {
         kind="simulado"
         timeLimitS={run.timeLimitS}
         initialProgress={run.progress}
+        attemptKey={run.key}
         onExit={() => {
           setRun(null)
           setPending(loadSimulado())
@@ -97,13 +98,15 @@ export function SimuladoPage() {
                   key={n}
                   type="button"
                   onClick={() => setSize(n)}
+                  aria-label={`${n} questões${hint ? ` (${hint})` : ''}`}
+                  aria-pressed={size === n}
                   className={`flex flex-col items-center justify-center rounded-xl border px-5 py-2 text-sm font-semibold ${
-                    size === n ? 'border-brand-600 bg-brand-600 text-white' : 'border-line hover:bg-canvas'
+                    size === n ? 'border-brand-600 bg-brand-600 text-on-brand' : 'border-line hover:bg-canvas'
                   }`}
                 >
                   {n}
                   {hint && (
-                    <span className={`text-[10px] font-medium ${size === n ? 'text-white/80' : 'text-ink-3'}`}>{hint}</span>
+                    <span className={`text-[11px] font-medium ${size === n ? 'text-on-brand/80' : 'text-ink-3'}`}>{hint}</span>
                   )}
                 </button>
               ))}
@@ -126,12 +129,12 @@ export function SimuladoPage() {
               </p>
             )}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="checkbox" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} className="size-4 accent-brand-600" />
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" checked={onlyNew} onChange={(e) => setOnlyNew(e.target.checked)} className="size-5 accent-brand-600" />
             Só questões que eu ainda não respondi
           </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm">
-            <input type="checkbox" checked={timed} onChange={(e) => setTimed(e.target.checked)} className="size-4 accent-brand-600" />
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm">
+            <input type="checkbox" checked={timed} onChange={(e) => setTimed(e.target.checked)} className="size-5 accent-brand-600" />
             Cronometrar no ritmo de prova ({formatDuration(size * SECONDS_PER_QUESTION)} para {size} questões)
           </label>
         </div>

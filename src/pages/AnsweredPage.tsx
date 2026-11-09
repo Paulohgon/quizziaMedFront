@@ -56,8 +56,8 @@ export function AnsweredPage() {
             role="tab"
             aria-selected={tab === t.value}
             onClick={() => setTab(t.value)}
-            className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
-              tab === t.value ? 'bg-brand-600 text-white shadow-sm' : 'text-ink-2 hover:bg-ink-1/5'
+            className={`min-h-10 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+              tab === t.value ? 'bg-brand-600 text-on-brand shadow-sm' : 'text-ink-2 hover:bg-ink-1/5'
             }`}
           >
             {t.label}

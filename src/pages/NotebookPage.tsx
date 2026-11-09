@@ -53,8 +53,8 @@ export function NotebookPage() {
             role="tab"
             aria-selected={tab === t.value}
             onClick={() => setTab(t.value)}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
-              tab === t.value ? 'bg-brand-600 text-white shadow-sm' : 'text-ink-2 hover:bg-ink-1/5'
+            className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+              tab === t.value ? 'bg-brand-600 text-on-brand shadow-sm' : 'text-ink-2 hover:bg-ink-1/5'
             }`}
           >
             <Icon name={t.icon} className="size-4" />
@@ -130,7 +130,7 @@ function NotebookRow({ question: q, showNote, onOpen }: { question: Question; sh
   return (
     <Card className="transition hover:border-brand-200">
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-4 p-4 text-left sm:p-5">
-        <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-amber-50 text-amber-500">
+        <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-warn-soft text-warn">
           <Icon name={showNote ? 'pencil' : 'star'} filled={!showNote} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">

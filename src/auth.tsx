@@ -9,7 +9,8 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>
   /** Cria a conta (ainda sem sessão) e devolve o e-mail para onde o código foi enviado. */
   register: (name: string, email: string, password: string) => Promise<string>
-  verifyEmail: (email: string, code: string) => Promise<void>
+  /** A senha vai junto: o servidor confere que quem confirma o código é quem definiu a senha. */
+  verifyEmail: (email: string, code: string, password: string) => Promise<void>
   logout: () => void
 }
 
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       login: async (email, password) => start(await api.login(email, password)),
       register: async (name, email, password) => (await api.register(name, email, password)).email,
-      verifyEmail: async (email, code) => start(await api.verifyEmail(email, code)),
+      verifyEmail: async (email, code, password) => start(await api.verifyEmail(email, code, password)),
     }),
     [user, loading, logout, start],
   )

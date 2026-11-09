@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { api, type FacetValue, type Filters } from '../api'
 import { Button, Icon } from './ui'
 
@@ -24,7 +24,7 @@ interface Props {
 }
 
 /** Barra com busca, botão de filtros e os filtros ativos como chips removíveis. */
-export function FilterBar({ params, onChange }: Props) {
+export function FilterBar({ params, onChange, trailing }: Props & { trailing?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState(params.get('q') ?? '')
   const { data: exams } = useQuery({ queryKey: ['exams'], queryFn: api.exams, enabled: params.has('exam_id') })
@@ -64,7 +64,7 @@ export function FilterBar({ params, onChange }: Props) {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar no enunciado (ex.: pré-eclâmpsia)"
+            placeholder="Buscar no enunciado"
             className="w-full rounded-xl border border-line bg-surface py-2.5 pr-3 pl-10 text-sm shadow-card outline-none placeholder:text-ink-3 focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
           />
         </form>
@@ -72,12 +72,12 @@ export function FilterBar({ params, onChange }: Props) {
           <Icon name="filter" className="size-4" />
           Filtros
           {active > 0 && (
-            <span className="grid min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] text-white">{active}</span>
+            <span className="grid min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-[11px] text-on-brand">{active}</span>
           )}
         </Button>
       </div>
 
-      {chips.length > 0 && (
+      {(chips.length > 0 || trailing) && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map((c) => (
             <button
@@ -90,19 +90,23 @@ export function FilterBar({ params, onChange }: Props) {
                   rest.forEach((v) => next.append(c.key, v))
                 })
               }
-              className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 py-1 pr-2 pl-3 text-xs font-medium text-brand-800 hover:bg-brand-100"
+              aria-label={`Remover filtro ${c.label}`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-50 pr-2.5 pl-3.5 text-[13px] font-semibold text-brand-800 hover:bg-brand-100"
             >
               {c.label}
-              <Icon name="x" className="size-3.5" />
+              <Icon name="x" className="size-[13px]" />
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => update((next) => OWN_KEYS.forEach((k) => next.delete(k)))}
-            className="text-xs font-semibold text-ink-3 hover:text-ink-1"
-          >
-            Limpar tudo
-          </button>
+          {chips.length > 0 && (
+            <button
+              type="button"
+              onClick={() => update((next) => OWN_KEYS.forEach((k) => next.delete(k)))}
+              className="text-xs font-semibold text-ink-3 hover:text-ink-1"
+            >
+              Limpar tudo
+            </button>
+          )}
+          {trailing && <div className="ml-auto">{trailing}</div>}
         </div>
       )}
 
@@ -120,7 +124,7 @@ function FilterDrawer({ params, onChange, onClose }: Props & { onClose: () => vo
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <button type="button" aria-label="Fechar filtros" onClick={onClose} className="absolute inset-0 bg-ink-1/30 backdrop-blur-[2px]" />
+      <button type="button" aria-label="Fechar filtros" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div className="relative flex h-full w-full max-w-sm flex-col bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-lg font-bold">Filtros</h2>
@@ -179,15 +183,15 @@ export function FilterPanel({ params, onChange }: Props) {
                     type="button"
                     aria-pressed={checked}
                     onClick={() => toggle(key, value)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
+                    className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
                       checked
-                        ? 'border-brand-600 bg-brand-600 text-white'
+                        ? 'border-brand-600 bg-brand-600 text-on-brand'
                         : 'border-line bg-surface text-ink-2 hover:border-brand-300'
                     }`}
                   >
                     {checked && <Icon name="check" className="size-3.5" />}
                     {value}
-                    <span className={`text-xs ${checked ? 'text-white/70' : 'text-ink-3'}`}>{v.count}</span>
+                    <span className={`text-xs ${checked ? 'text-on-brand/70' : 'text-ink-3'}`}>{v.count}</span>
                   </button>
                 )
               })}

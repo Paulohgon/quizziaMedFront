@@ -1,37 +1,103 @@
 @import 'tailwindcss';
 
+/* Paleta da marca Quizzia Med (claro). O tema escuro redefine as mesmas variáveis logo abaixo,
+   então toda classe (bg-surface, text-ink-2, bg-brand-600…) troca sozinha com o tema do sistema. */
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  /* Marca: verde-azulado clínico */
-  --color-brand-50: #effaf7;
-  --color-brand-100: #d7f2ea;
-  --color-brand-200: #b0e4d6;
-  --color-brand-300: #7ccfbc;
-  --color-brand-400: #46b39d;
-  --color-brand-500: #23977f;
-  --color-brand-600: #157a67;
-  --color-brand-700: #126254;
-  --color-brand-800: #124e45;
-  --color-brand-900: #11413a;
-  --color-brand-950: #062520;
+  /* Marca: menta / floresta. 600 = cor da marca, 700 = texto da marca, 800 = texto forte, 900 = floresta */
+  --color-brand-50: #e2f3ec;
+  --color-brand-100: #cdeadf;
+  --color-brand-200: #a9dcc8;
+  --color-brand-300: #78c7ab;
+  --color-brand-400: #3dcb9c;
+  --color-brand-500: #14a383;
+  --color-brand-600: #0e7c66;
+  --color-brand-700: #0e7c66;
+  --color-brand-800: #09594a;
+  --color-brand-900: #073b31;
+  --color-brand-950: #04231b;
+  /* Texto/ícone sobre fundo da marca (branco no claro, verde-escuro no escuro). */
+  --color-on-brand: #ffffff;
 
   /* Texto e superfícies */
-  --color-ink-1: #0f1d1a;
-  --color-ink-2: #3d4a47;
-  --color-ink-3: #6b7774;
-  --color-line: #e4e9e7;
-  --color-canvas: #f6f8f7;
+  --color-ink-1: #0d1f1a;
+  --color-ink-2: #3c4d47;
+  --color-ink-3: #5f6f69;
+  --color-line: #e0e7e3;
+  --color-line-2: #c9d4cf;
+  --color-canvas: #f4f7f5;
   --color-surface: #ffffff;
+  --color-surface-2: #eef3f0;
 
   /* Estados (sempre com ícone/texto, nunca só cor) */
-  --color-good: #157a4b;
-  --color-good-soft: #e5f5ec;
+  --color-good: #13703f;
+  --color-good-soft: #e4f4ea;
+  --color-on-good: #ffffff;
   --color-bad: #b42318;
   --color-bad-soft: #fdecea;
+  --color-on-bad: #ffffff;
+  /* Notas, sequência de dias, ritmo acima do esperado */
+  --color-warn: #a15c07;
+  --color-warn-soft: #fdf1dc;
 
-  --shadow-card: 0 1px 2px rgb(15 29 26 / 0.04), 0 4px 16px -4px rgb(15 29 26 / 0.06);
+  /* Painel escuro da tela de entrada */
+  --color-panel: #073b31;
+  --color-panel-line: #073b31;
+  --color-panel-ink: #cfe9df;
+  --color-panel-muted: #9cc7b8;
+  --color-panel-accent: #7fe6c2;
+
+  /* Logo: quadrado da marca e cruz médica */
+  --color-logo: #0e7c66;
+  --color-logo-cross: #8febcb;
+
+  --shadow-card: 0 1px 2px rgb(13 31 26 / 0.04), 0 8px 24px -8px rgb(13 31 26 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-brand-50: #11332a;
+    --color-brand-100: #16402f;
+    --color-brand-200: #1f4d40;
+    --color-brand-300: #2a6b58;
+    --color-brand-400: #2fa982;
+    --color-brand-500: #3dcb9c;
+    --color-brand-600: #3dcb9c;
+    --color-brand-700: #5fd9af;
+    --color-brand-800: #8be9c8;
+    --color-brand-900: #0d221d;
+    --color-brand-950: #04231b;
+    --color-on-brand: #04231b;
+
+    --color-ink-1: #e6efeb;
+    --color-ink-2: #b1c1bb;
+    --color-ink-3: #8b9c96;
+    --color-line: #21322d;
+    --color-line-2: #33473f;
+    --color-canvas: #0a1311;
+    --color-surface: #101c19;
+    --color-surface-2: #16251f;
+
+    --color-good: #4ade97;
+    --color-good-soft: #0f2c1f;
+    --color-on-good: #062616;
+    --color-bad: #f2857a;
+    --color-bad-soft: #3a1512;
+    --color-on-bad: #2a0806;
+    --color-warn: #f2b55a;
+    --color-warn-soft: #33260f;
+
+    --color-panel: #0d221d;
+    --color-panel-line: #1c3a32;
+    --color-logo: #14866c;
+    --color-logo-cross: #a6f2d6;
+
+    --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  }
 }
 
 body {
@@ -46,4 +112,9 @@ h3 {
 
 ::selection {
   @apply bg-brand-200;
+}
+
+/* Prova/simulado em andamento: sem a navegação inferior do celular (evita sair sem querer). */
+body[data-exam] .mobile-nav {
+  display: none;
 }

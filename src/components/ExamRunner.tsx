@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { api, formatDuration, pct, type AnswerResult, type ExamProgress, type Letter, type Question } from '../api'
+import { api, ApiError, formatDuration, newKey, pct, type AnswerResult, type ExamProgress, type Letter, type Question } from '../api'
 import { clearSimulado, saveSimuladoProgress } from '../examSession'
 import { useStopwatch, useTick } from '../stopwatch'
 import { QuestionView } from './QuestionView'
@@ -17,8 +17,12 @@ interface Props {
   timeLimitS: number | null
   /** Progresso salvo de uma tentativa interrompida, para continuar de onde parou. */
   initialProgress?: ExamProgress | null
+  /** Chave da entrega (idempotência); sem ela, uma nova por tela de prova. */
+  attemptKey?: string
   onExit: () => void
 }
+
+const CONFLICT = 'Esta prova mudou em outra aba ou dispositivo (ou já foi entregue). Recarregue para continuar de onde ela está.'
 
 interface Outcome {
   results: Record<number, AnswerResult>
@@ -32,7 +36,7 @@ interface Outcome {
  * O progresso fica salvo até entregar (prova no servidor, simulado no
  * navegador). As respostas só são corrigidas e gravadas ao entregar.
  */
-export function ExamRunner({ title, questions, kind, examId, timeLimitS, initialProgress, onExit }: Props) {
+export function ExamRunner({ title, questions, kind, examId, timeLimitS, initialProgress, attemptKey, onExit }: Props) {
   const queryClient = useQueryClient()
   const [answers, setAnswers] = useState<Answers>(initialProgress?.answers ?? {})
   const [current, setCurrent] = useState(Math.min(initialProgress?.current ?? 0, questions.length - 1))
@@ -47,6 +51,25 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
   // Questão atual também em ref, para os callbacks abaixo não mudarem a cada navegação.
   const currentRef = useRef(current)
   currentRef.current = current
+  // Prova: revisão do progresso no servidor que esta aba conhece. As gravações vão em fila
+  // (uma por vez, cada uma com a rev devolvida pela anterior); se outra aba gravou ou a prova
+  // já foi entregue, o servidor responde 409 e esta aba para e pede para recarregar.
+  const rev = useRef<string | null>(initialProgress?.rev ?? null)
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
+  const saving = useRef(false)
+  const clientKey = useRef(attemptKey ?? newKey())
+  // A pessoa fez algo nesta aba (navegou ou respondeu)? Só abrir e sair não grava nada:
+  // senão uma aba aberta à toa "tomaria" a prova de outra aba em uso.
+  const touched = useRef(false)
+  const startElapsed = useRef(initialProgress?.elapsed_ms ?? 0)
+  const readClock = clock.read
+  // Mensagem de conflito (outra aba mudou a prova, ou esta entrega já tinha sido feita).
+  const [conflict, setConflict] = useState<string | null>(null)
+  const conflictRef = useRef(false)
+  const markConflict = useCallback((message: string) => {
+    conflictRef.current = true
+    setConflict(message)
+  }, [])
   // Só o <ExamClock> re-renderiza a cada segundo; esta tela só quando algo muda de fato.
 
   const leaveQuestion = useCallback(() => {
@@ -62,6 +85,9 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
       clock.pause()
       leaveQuestion()
       const durationS = Math.round(clock.read() / 1000)
+      // Espera a última gravação do progresso terminar (a entrega confere a rev dela).
+      await saveQueue.current
+      if (conflictRef.current) throw new ApiError(409, 'Esta prova mudou em outra aba.')
       // Uma requisição só: o servidor corrige e grava tudo de uma vez.
       const { results } = await api.submitAttempt({
         kind,
@@ -75,11 +101,18 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
           }),
         time_limit_s: timeLimitS,
         duration_s: durationS,
+        progress_rev: kind === 'prova' ? rev.current : null,
+        client_key: clientKey.current,
       })
       return { results, durationS, timedOut }
     },
-    onError: () => {
+    onError: (error) => {
       delivered.current = false
+      if (error instanceof ApiError && error.status === 409) {
+        // Simulado já entregue (a resposta tinha se perdido): não há mais o que continuar.
+        if (kind === 'simulado') clearSimulado()
+        markConflict(kind === 'simulado' ? 'Este simulado já tinha sido entregue. O resultado está no histórico de tentativas.' : CONFLICT)
+      } else clock.resume()
     },
     onSuccess: (out) => {
       // O servidor já apaga o progresso da prova ao gravar a tentativa.
@@ -119,30 +152,64 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
     return () => clearInterval(id)
   }, [kind, outcome, answers, current])
 
-  // Prova: salva no servidor só quando uma resposta muda...
+  /** Prova: grava o progresso no servidor, em fila (ver `rev`). */
+  const saveProgress = useCallback(() => {
+    if (kind !== 'prova' || examId == null) return
+    saveQueue.current = saveQueue.current.then(async () => {
+      if (delivered.current || conflictRef.current) return
+      saving.current = true
+      try {
+        const saved = await api.saveProgress(examId, { ...latest.current(), rev: rev.current })
+        rev.current = saved.rev ?? null
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) markConflict(CONFLICT)
+      } finally {
+        saving.current = false
+      }
+    })
+  }, [kind, examId, markConflict])
+
+  // Prova: salva no servidor quando uma resposta muda...
   const initialAnswers = useRef(answers)
   useEffect(() => {
-    if (kind !== 'prova' || examId == null || delivered.current || answers === initialAnswers.current) return
-    api.saveProgress(examId, latest.current()).catch(() => {})
-  }, [kind, examId, answers])
+    if (answers !== initialAnswers.current) saveProgress()
+  }, [answers, saveProgress])
 
   // ...e ao sair dela (trocar de página ou fechar a aba), para guardar a questão e o tempo.
+  // Ao fechar a aba não dá para esperar a fila: envia direto (keepalive). Se uma gravação
+  // ainda estiver em andamento, a dela já leva as respostas; esta só perderia a posição.
   useEffect(() => {
     if (kind !== 'prova' || examId == null) return
     const leave = () => {
+      if (delivered.current || conflictRef.current || saving.current) return
+      // Sem ação e menos de 5 s nesta aba: nada a guardar.
+      if (!touched.current && readClock() - startElapsed.current < 5000) return
       const progress = latest.current()
-      if (!delivered.current && Object.keys(progress.answers).length)
-        api.saveProgress(examId, progress, true).catch(() => {})
+      if (rev.current == null && !Object.keys(progress.answers).length && !progress.current) return
+      api.saveProgress(examId, { ...progress, rev: rev.current }, true).then(
+        (saved) => (rev.current = saved.rev ?? null),
+        () => {},
+      )
     }
     window.addEventListener('pagehide', leave)
     return () => {
       window.removeEventListener('pagehide', leave)
       leave()
     }
-  }, [kind, examId])
+  }, [kind, examId, readClock])
+
+  // Durante a prova, esconde a navegação inferior do celular (evita sair sem querer).
+  useEffect(() => {
+    if (outcome) return
+    document.body.dataset.exam = '1'
+    return () => {
+      delete document.body.dataset.exam
+    }
+  }, [outcome])
 
   const goTo = useCallback(
     (index: number) => {
+      touched.current = true
       leaveQuestion()
       setCurrent(index)
       window.scrollTo({ top: 0 })
@@ -152,7 +219,14 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
 
   const q = questions[current]
   const qid = q.id
-  const select = useCallback((letter: Letter) => setAnswers((a) => ({ ...a, [qid]: letter })), [qid])
+  const select = useCallback(
+    (letter: Letter) => {
+      if (conflictRef.current) return
+      touched.current = true
+      setAnswers((a) => ({ ...a, [qid]: letter }))
+    },
+    [qid],
+  )
 
   if (outcome) {
     return <Result title={title} questions={questions} answers={answers} outcome={outcome} timeLimitS={timeLimitS} onExit={onExit} />
@@ -162,28 +236,60 @@ export function ExamRunner({ title, questions, kind, examId, timeLimitS, initial
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 border-b border-line bg-canvas/95 px-4 py-3 backdrop-blur lg:top-0">
-        <div>
-          <h1 className="text-lg font-extrabold">{title}</h1>
-          <p className="text-xs text-ink-3">
-            {answered} de {questions.length} respondidas
-          </p>
+      <div className="sticky top-[61px] z-20 -mx-4 flex items-center justify-between gap-2 border-b border-line bg-canvas/95 px-4 py-2 backdrop-blur sm:gap-3 sm:py-3 lg:top-0">
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+          <button
+            type="button"
+            onClick={onExit}
+            title="Sair (o progresso fica salvo para continuar depois)"
+            aria-label="Sair da prova (o progresso fica salvo)"
+            className="-ml-2 grid size-10 shrink-0 place-items-center rounded-lg text-ink-3 hover:bg-surface-2 hover:text-ink-1"
+          >
+            <Icon name="arrowLeft" className="size-5" />
+          </button>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-extrabold sm:text-lg" title={title}>
+              {title}
+            </h1>
+            <p className="truncate text-xs text-ink-3">
+              {answered} de {questions.length} respondidas
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <ExamClock clock={clock} timeLimitS={timeLimitS} disabled={finish.isPending} onTimeUp={onTimeUp} />
           <Button
             variant="secondary"
-            disabled={finish.isPending}
+            disabled={finish.isPending || conflict != null}
             onClick={() => {
-              if (answered === questions.length || confirm('Ainda há questões sem resposta. Entregar mesmo assim?'))
-                finish.mutate(false)
+              if (answered === questions.length || confirm('Ainda há questões sem resposta. Entregar mesmo assim?')) finish.mutate(false)
             }}
           >
             {finish.isPending ? 'Corrigindo…' : 'Entregar'}
           </Button>
         </div>
       </div>
-      {finish.error && <ErrorMessage error={finish.error} />}
+      {conflict ? (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+          <span>{conflict}</span>
+          {kind === 'prova' ? (
+            <Button variant="secondary" onClick={() => window.location.reload()}>
+              Recarregar
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={onExit}>
+              Voltar
+            </Button>
+          )}
+        </div>
+      ) : (
+        finish.error && <ErrorMessage error={finish.error} />
+      )}
+      {finish.isPaused && (
+        <p role="status" className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">
+          Sem internet. A entrega será enviada assim que a conexão voltar — não feche esta página.
+        </p>
+      )}
 
       <QuestionGrid questions={questions} answers={answers} current={current} onGo={goTo} />
 
@@ -244,9 +350,9 @@ const ExamClock = memo(function ExamClock({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 font-display text-lg font-bold tabular-nums transition ${
+      className={`inline-flex h-10 items-center gap-1.5 rounded-xl px-2.5 font-display text-base font-bold tabular-nums transition sm:px-3 sm:text-lg ${
         clock.paused
-          ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
+          ? 'bg-warn-soft text-warn ring-1 ring-warn/20'
           : lowTime
             ? 'bg-bad-soft text-bad'
             : 'bg-surface text-ink-1 ring-1 ring-line hover:ring-brand-300'
@@ -259,7 +365,10 @@ const ExamClock = memo(function ExamClock({
   )
 })
 
-/** Grade de navegação (até 150 botões): só re-renderiza ao responder ou trocar de questão. */
+/**
+ * Grade de navegação (até 150 botões): só re-renderiza ao responder ou trocar de questão.
+ * No celular, provas grandes ocupariam mais de uma tela: a grade fica recolhida atrás de um botão.
+ */
 const QuestionGrid = memo(function QuestionGrid({
   questions,
   answers,
@@ -271,24 +380,50 @@ const QuestionGrid = memo(function QuestionGrid({
   current: number
   onGo: (index: number) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const collapsible = questions.length > 20
+  const answered = questions.filter((q) => answers[q.id]).length
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {questions.map((item, i) => (
+    <div>
+      {collapsible && (
         <button
-          key={item.id}
           type="button"
-          onClick={() => onGo(i)}
-          className={`size-9 rounded-lg text-xs font-bold transition ${
-            i === current
-              ? 'bg-brand-600 text-white'
-              : answers[item.id]
-                ? 'bg-brand-100 text-brand-800'
-                : 'bg-surface text-ink-3 ring-1 ring-line hover:ring-brand-300'
-          }`}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex h-11 w-full items-center justify-between rounded-xl border border-line bg-surface px-4 text-sm font-semibold text-ink-2 lg:hidden"
         >
-          {i + 1}
+          <span>
+            Questão {current + 1} de {questions.length} · {answered} respondidas
+          </span>
+          <span className="inline-flex items-center gap-1 text-brand-700">
+            {open ? 'Fechar mapa' : 'Ver todas'}
+            <Icon name="arrowRight" className={`size-4 transition ${open ? '-rotate-90' : 'rotate-90'}`} />
+          </span>
         </button>
-      ))}
+      )}
+      <div className={`flex-wrap gap-1.5 ${collapsible ? (open ? 'mt-3 flex' : 'hidden lg:flex') : 'flex'}`}>
+        {questions.map((item, i) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              onGo(i)
+              setOpen(false)
+            }}
+            aria-label={`Questão ${i + 1}${answers[item.id] ? ', respondida' : ''}`}
+            aria-current={i === current ? 'step' : undefined}
+            className={`size-10 rounded-lg text-xs font-bold transition lg:size-9 ${
+              i === current
+                ? 'bg-brand-600 text-on-brand'
+                : answers[item.id]
+                  ? 'bg-brand-100 text-brand-800'
+                  : 'bg-surface text-ink-3 ring-1 ring-line hover:ring-brand-300'
+            }`}
+          >
+            {i + 1}
+          </button>
+        ))}
+      </div>
     </div>
   )
 })

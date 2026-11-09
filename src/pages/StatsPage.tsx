@@ -29,7 +29,7 @@ export function StatsPage() {
   const scored = data.correct + data.wrong
   return (
     <div className="space-y-6">
-      <PageHeader title="Desempenho" subtitle="Considera a sua resposta mais recente em cada questão." />
+      <PageHeader title="Desempenho" subtitle="Considera a sua resposta mais recente em cada questão. Anuladas contam em “Feitas”, mas não entram no percentual." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Taxa de acerto" value={`${pct(data.correct, scored)}%`} hint={`${data.correct} de ${scored} questões`} />
@@ -114,7 +114,7 @@ function AccuracyBars({ groups }: { groups: StatsGroup[] }) {
                 <span className="text-xs text-ink-3">
                   {g.correct}/{g.scored}
                   {g.avg_time_s != null && (
-                    <span className={g.avg_time_s > SECONDS_PER_QUESTION ? 'text-amber-700' : ''}>
+                    <span className={g.avg_time_s > SECONDS_PER_QUESTION ? 'text-warn' : ''}>
                       {' '}
                       · {formatDuration(g.avg_time_s)}/questão
                     </span>

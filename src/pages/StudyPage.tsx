@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api, pct, type AnswerResult } from '../api'
 import { FilterBar } from '../components/FilterPanel'
 import { QuestionView } from '../components/QuestionView'
-import { Button, Card, EmptyState, ErrorMessage, Icon, PageHeader, Spinner } from '../components/ui'
+import { Button, Card, EmptyState, ErrorMessage, Icon, Spinner } from '../components/ui'
 
 const BATCH = 20
 
@@ -32,6 +32,14 @@ const COPY: Record<Props['status'], { title: string; subtitle?: string; emptyTit
     emptyTitle: 'Nenhuma questão errada por aqui',
     empty: 'Quando você errar uma questão, ela aparece aqui para tentar de novo. Acertou? Ela sai da lista.',
   },
+}
+
+const dateFmt = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+
+/** Ex.: "Sábado, 7 de novembro". */
+function today() {
+  const s = dateFmt.format(new Date())
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 export function StudyPage({ status }: Props) {
@@ -82,32 +90,49 @@ export function StudyPage({ status }: Props) {
     setRound((r) => r + 1)
   }
 
-  return (
-    <div>
-      <PageHeader
-        title={copy.title}
-        subtitle={copy.subtitle}
-        actions={
-          <div className="flex items-center gap-3">
-            {session.answered > 0 && (
-              <div className="rounded-xl border border-line bg-surface px-3 py-1.5 text-right shadow-card">
-                <p className="text-[11px] font-medium tracking-wide text-ink-3 uppercase">Nesta sessão</p>
-                <p className="text-sm font-semibold">
-                  {session.correct}/{session.answered} · {pct(session.correct, session.answered)}%
-                </p>
-              </div>
-            )}
-          </div>
-        }
+  const randomToggle = (
+    <label className="flex min-h-10 cursor-pointer items-center gap-2 px-1 text-[13px] text-ink-2">
+      <input
+        type="checkbox"
+        checked={random}
+        onChange={(e) => {
+          const nextParams = new URLSearchParams(params)
+          if (e.target.checked) nextParams.set('ordem', 'aleatoria')
+          else nextParams.delete('ordem')
+          setParams(nextParams)
+        }}
+        className="size-5 accent-brand-600"
       />
+      Ordem aleatória
+    </label>
+  )
 
-      <FilterBar params={params} onChange={setParams} />
+  return (
+    <div className="mx-auto max-w-[860px]">
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="mb-1.5 text-[13px] font-medium text-ink-3">{today()}</p>
+          <h1 className="text-[26px] leading-tight font-extrabold text-ink-1 sm:text-[32px]">{copy.title}</h1>
+          {copy.subtitle && <p className="mt-1 max-w-xl text-sm text-ink-3">{copy.subtitle}</p>}
+        </div>
+        {session.answered > 0 && (
+          <div className="rounded-xl border border-line bg-surface px-3.5 py-2">
+            <p className="text-[11px] font-semibold tracking-[0.06em] text-ink-3 uppercase">Nesta sessão</p>
+            <p className="mt-0.5 text-sm font-bold">
+              {session.correct}/{session.answered}{' '}
+              <span className="font-medium text-good">· {pct(session.correct, session.answered)}%</span>
+            </p>
+          </div>
+        )}
+      </header>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-3">
-        <span>
-          {data && data.total > 0 && (
-            <>
-              <strong className="font-semibold text-ink-1">{data.total}</strong>{' '}
+      <FilterBar params={params} onChange={setParams} trailing={randomToggle} />
+
+      {data && data.total > 0 && (
+        <div className="mb-5 space-y-2">
+          <div className="flex flex-wrap justify-between gap-2 text-[13px] text-ink-3">
+            <span>
+              <strong className="font-semibold text-ink-1">{data.total.toLocaleString('pt-BR')}</strong>{' '}
               {status === 'wrong'
                 ? 'para refazer'
                 : status === 'review'
@@ -117,39 +142,19 @@ export function StudyPage({ status }: Props) {
                   : data.total === 1
                     ? 'questão restante'
                     : 'questões restantes'}
-              {question && (
-                <>
-                  {' '}
-                  · rodada {Math.min(index + 1, items.length)} de {items.length}
-                </>
-              )}
-            </>
-          )}
-        </span>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={random}
-            onChange={(e) => {
-              const nextParams = new URLSearchParams(params)
-              if (e.target.checked) nextParams.set('ordem', 'aleatoria')
-              else nextParams.delete('ordem')
-              setParams(nextParams)
-            }}
-            className="size-4 accent-brand-600"
-          />
-          Ordem aleatória
-        </label>
-      </div>
-
-      {data && items.length > 0 && (
-        <div className="mb-5 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden="true">
-          <div
-            className="h-full rounded-full bg-brand-500 transition-all"
-            style={{
-              width: `${(Math.min(index, items.length) / items.length) * 100}%`,
-            }}
-          />
+            </span>
+            {question && (
+              <span>
+                {Math.min(index + 1, items.length)} de {items.length} nesta rodada
+              </span>
+            )}
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-line" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-brand-600 transition-all"
+              style={{ width: `${(Math.min(index, items.length) / items.length) * 100}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -173,7 +178,13 @@ export function StudyPage({ status }: Props) {
       )}
 
       {question && (
-        <QuestionView key={`${round}-${question.id}`} question={question} mode="practice" onAnswered={onAnswered}>
+        <QuestionView
+          key={`${round}-${question.id}`}
+          question={question}
+          mode="practice"
+          onAnswered={onAnswered}
+          onSkip={next}
+        >
           <div className="flex justify-end">
             <Button onClick={next} className="px-6">
               Próxima questão <Icon name="arrowRight" className="size-4" />
@@ -182,17 +193,9 @@ export function StudyPage({ status }: Props) {
         </QuestionView>
       )}
 
-      {question && (
-        <div className="mt-3 flex justify-end">
-          <button type="button" onClick={next} className="text-sm font-medium text-ink-3 hover:text-ink-1">
-            Pular esta questão
-          </button>
-        </div>
-      )}
-
       {finishedBatch && (
         <Card className="px-6 py-10 text-center">
-          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand-600">
+          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-brand-50 text-brand-700">
             <Icon name="check" className="size-6" />
           </div>
           <h2 className="text-xl font-bold">Rodada concluída</h2>

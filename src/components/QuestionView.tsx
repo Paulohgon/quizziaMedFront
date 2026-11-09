@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, formatDuration, SECONDS_PER_QUESTION, type AnswerResult, type Letter, type Question } from '../api'
 import { useStopwatch, useTick } from '../stopwatch'
 import { Badge, Button, Card, Icon } from './ui'
@@ -23,6 +23,8 @@ interface Props {
   /** Modo revisão: resultado a exibir (por padrão, o da última tentativa). */
   review?: { chosen: Letter | null; correct: Letter | null; isCorrect: boolean | null }
   onAnswered?: (result: AnswerResult) => void
+  /** Modo prática: mostra "Pular" ao lado de "Confirmar resposta". */
+  onSkip?: () => void
   /** Ações exibidas depois da correção (ex.: "Próxima questão"). */
   children?: ReactNode
 }
@@ -38,6 +40,7 @@ export const QuestionView = memo(function QuestionView({
   onSelect,
   review,
   onAnswered,
+  onSkip,
   children,
 }: Props) {
   const queryClient = useQueryClient()
@@ -46,6 +49,8 @@ export const QuestionView = memo(function QuestionView({
   // O componente é recriado a cada questão (key), então o relógio começa quando ela aparece.
   const clock = useStopwatch()
   const [timeSpentMs, setTimeSpentMs] = useState<number | null>(null)
+  // Trava síncrona: Enter e toque no mesmo instante (antes de re-renderizar) enviariam a resposta duas vezes.
+  const submitted = useRef(false)
 
   const answer = useMutation({
     mutationFn: (letter: Letter) => {
@@ -53,6 +58,10 @@ export const QuestionView = memo(function QuestionView({
       const spent = clock.read()
       setTimeSpentMs(spent)
       return api.answer(question.id, letter, spent)
+    },
+    onError: () => {
+      submitted.current = false
+      clock.resume()
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['stats'] })
@@ -70,6 +79,12 @@ export const QuestionView = memo(function QuestionView({
   const imageOptions = question.options.some((o) => o.is_image)
   const { exam } = question
 
+  function submit(letter: Letter) {
+    if (submitted.current) return
+    submitted.current = true
+    answer.mutate(letter)
+  }
+
   function pick(letter: Letter) {
     if (mode === 'exam') onSelect?.(letter)
     else if (mode === 'practice' && !locked) setChoice(letter)
@@ -86,7 +101,7 @@ export const QuestionView = memo(function QuestionView({
         pick(letter)
       } else if (e.key === 'Enter' && mode === 'practice' && choice && !locked) {
         e.preventDefault()
-        answer.mutate(choice)
+        submit(choice)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -95,22 +110,18 @@ export const QuestionView = memo(function QuestionView({
 
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden">
-        <header className="flex flex-wrap items-center gap-2 border-b border-line bg-canvas/60 px-5 py-3 sm:px-7">
-          <span className="font-display text-sm font-bold text-ink-1">{label ?? `Questão ${question.question_number}`}</span>
-          <span className="text-xs text-ink-3">
-            {exam.institution} {exam.exam_year}
+      <Card className="overflow-hidden rounded-[18px]">
+        <header className="flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-line px-5 py-4 sm:px-7">
+          <span className="font-display text-[15px] font-bold text-ink-1">{label ?? `Questão ${question.question_number}`}</span>
+          <span className="text-[13px] text-ink-3">
+            {exam.institution} · {exam.exam_year}
             {exam.exam_variant && ` · ${exam.exam_variant}`}
+            {` · ${exam.state ?? exam.region}`}
             {label && ` · questão ${question.question_number}`}
           </span>
           <span className="ml-auto flex flex-wrap items-center gap-1.5">
-            {mode === 'practice' && !revealed && <Stopwatch clock={clock} />}
-            <Badge>
-              {exam.region}
-              {exam.state && ` · ${exam.state}`}
-            </Badge>
             {question.specialty ? (
-              <Badge tone="brand">
+              <Badge>
                 {question.specialty}
                 {question.subspecialty && ` › ${question.subspecialty}`}
               </Badge>
@@ -118,36 +129,38 @@ export const QuestionView = memo(function QuestionView({
               <Badge tone="warn">Área a classificar</Badge>
             )}
             {question.annulled && <Badge tone="bad">Anulada</Badge>}
+            {mode === 'practice' && !revealed && <Stopwatch clock={clock} />}
             {mode !== 'exam' && <FavoriteButton question={question} />}
           </span>
         </header>
 
-        <div className="px-5 py-6 sm:px-7">
+        <div className="px-5 py-7 sm:px-7">
           {question.my_answer && mode === 'practice' && !revealed && (
-            <p className="mb-4 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
+            <p className="mb-4 inline-flex items-center gap-2 rounded-lg bg-warn-soft px-3 py-1.5 text-xs font-medium text-warn">
               <Icon name="retry" className="size-3.5" />
               Você já tentou esta questão {question.my_answer.attempts}× — o gabarito fica escondido até você responder.
             </p>
           )}
 
-          <p className="text-[15.5px] leading-7 whitespace-pre-line text-ink-1">{question.statement}</p>
+          <p className="text-base leading-[1.75] whitespace-pre-line text-ink-1">{question.statement}</p>
 
           {question.images.length > 0 && (
-            <div className={`mt-5 grid gap-3 ${imageOptions ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}`}>
+            <div className={`mt-5 grid gap-3 ${imageOptions ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'}`}>
               {question.images.map((src, i) => (
                 <button
                   key={src}
                   type="button"
                   onClick={() => setZoomed(src)}
+                  aria-label={`Ampliar figura ${i + 1}`}
                   className="group relative overflow-hidden rounded-xl border border-line bg-white"
                 >
                   <img
                     src={src}
                     alt={`Figura ${i + 1} da questão`}
                     loading="lazy"
-                    className={`mx-auto object-contain ${imageOptions ? 'max-h-[520px]' : 'max-h-56'}`}
+                    className={`mx-auto object-contain ${imageOptions ? 'max-h-[520px]' : 'max-h-72 sm:max-h-56'}`}
                   />
-                  <span className="absolute right-2 bottom-2 rounded-lg bg-ink-1/70 p-1.5 text-white opacity-0 transition group-hover:opacity-100">
+                  <span className="absolute right-2 bottom-2 rounded-lg bg-black/70 p-1.5 text-white opacity-0 transition group-hover:opacity-100 [@media(hover:none)]:opacity-100">
                     <Icon name="zoom" className="size-4" />
                   </span>
                 </button>
@@ -161,16 +174,16 @@ export const QuestionView = memo(function QuestionView({
               const isKey = revealed && correct === opt.letter
               const isWrong = revealed && isChosen && !isKey && !question.annulled
               let tone = 'border-line bg-surface hover:border-brand-300 hover:bg-brand-50/40'
-              let bubble = 'border-line text-ink-2 bg-surface'
+              let bubble = 'border-line-2 text-ink-2'
               if (isKey) {
-                tone = 'border-good/40 bg-good-soft'
-                bubble = 'border-good bg-good text-white'
+                tone = 'border-good/50 bg-good-soft'
+                bubble = 'border-good bg-good text-on-good'
               } else if (isWrong) {
-                tone = 'border-bad/40 bg-bad-soft'
-                bubble = 'border-bad bg-bad text-white'
+                tone = 'border-bad/50 bg-bad-soft'
+                bubble = 'border-bad bg-bad text-on-bad'
               } else if (isChosen) {
-                tone = 'border-brand-500 bg-brand-50 ring-1 ring-brand-500'
-                bubble = 'border-brand-600 bg-brand-600 text-white'
+                tone = 'border-brand-600 bg-brand-50 ring-[0.5px] ring-brand-600'
+                bubble = 'border-brand-600 bg-brand-600 text-on-brand'
               } else if (revealed) {
                 tone = 'border-line bg-surface opacity-60'
               }
@@ -183,10 +196,10 @@ export const QuestionView = memo(function QuestionView({
                   aria-checked={isChosen}
                   disabled={mode === 'review' || (mode === 'practice' && locked)}
                   onClick={() => pick(opt.letter)}
-                  className={`flex w-full items-start gap-3.5 rounded-xl border px-4 py-3.5 text-left text-[15px] leading-6 transition disabled:cursor-default ${tone}`}
+                  className={`flex w-full items-start gap-3.5 rounded-xl border px-4 py-3.5 text-left text-[15px] leading-[1.55] transition disabled:cursor-default ${tone}`}
                 >
                   <span
-                    className={`mt-px grid size-7 shrink-0 place-items-center rounded-full border text-xs font-bold transition ${bubble}`}
+                    className={`grid size-7 shrink-0 place-items-center rounded-full border-[1.5px] text-xs font-bold transition ${bubble}`}
                   >
                     {isKey ? <Icon name="check" className="size-4" /> : isWrong ? <Icon name="x" className="size-4" /> : opt.letter}
                   </span>
@@ -199,14 +212,28 @@ export const QuestionView = memo(function QuestionView({
           </div>
 
           {mode === 'practice' && !revealed && (
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
               <p className="hidden text-xs text-ink-3 sm:block">
-                Atalhos: <kbd className="rounded border border-line px-1">A</kbd>–<kbd className="rounded border border-line px-1">E</kbd>{' '}
-                para escolher, <kbd className="rounded border border-line px-1">Enter</kbd> para confirmar
+                Atalhos: <Kbd>A</Kbd>–<Kbd>E</Kbd> escolher · <Kbd>Enter</Kbd> confirmar
               </p>
-              <Button disabled={!choice || answer.isPending} onClick={() => choice && answer.mutate(choice)} className="w-full sm:w-auto">
-                {answer.isPending ? 'Corrigindo…' : 'Confirmar resposta'}
-              </Button>
+              <div className="flex w-full gap-2 sm:w-auto">
+                {onSkip && (
+                  <Button variant="secondary" onClick={onSkip} className="h-11 px-[18px] text-ink-2">
+                    Pular
+                  </Button>
+                )}
+                <Button
+                  disabled={!choice || answer.isPending}
+                  onClick={() => choice && submit(choice)}
+                  className="h-11 flex-1 px-[22px] sm:flex-none"
+                >
+                  {answer.isPending ? 'Corrigindo…' : 'Confirmar resposta'}
+                  {!answer.isPending && <Icon name="arrowRight" className="size-4" />}
+                </Button>
+              </div>
+              {answer.isPaused && (
+                <p className="w-full text-sm text-warn">Sem internet. Sua resposta será enviada assim que a conexão voltar.</p>
+              )}
               {answer.error && <p className="w-full text-sm text-bad">{answer.error.message}</p>}
             </div>
           )}
@@ -229,19 +256,58 @@ export const QuestionView = memo(function QuestionView({
 
       {revealed && children}
 
-      {zoomed && (
-        <div
-          role="dialog"
-          aria-label="Imagem ampliada"
-          onClick={() => setZoomed(null)}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-ink-1/80 p-4 backdrop-blur-sm"
-        >
-          <img src={zoomed} alt="Imagem ampliada" className="max-h-full max-w-full rounded-xl bg-white shadow-2xl" />
-        </div>
-      )}
+      {zoomed && <ZoomDialog src={zoomed} onClose={() => setZoomed(null)} />}
     </div>
   )
 })
+
+/**
+ * Figura ampliada. Num celular em pé, figuras largas (ECG, tabelas) ficariam pequenas demais
+ * encaixadas na largura: abrem maiores, com rolagem para arrastar e ver o resto.
+ */
+function ZoomDialog({ src, onClose }: { src: string; onClose: () => void }) {
+  const [wide, setWide] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Imagem ampliada"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className="fixed inset-0 z-50 overflow-auto bg-black/85 p-4 backdrop-blur-sm"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fechar imagem"
+        className="fixed top-3 right-3 z-10 grid size-11 place-items-center rounded-full bg-black/70 text-white"
+      >
+        <Icon name="x" className="size-5" />
+      </button>
+      <div onClick={(e) => e.target === e.currentTarget && onClose()} className="flex min-h-full min-w-max items-center justify-center">
+        <img
+          src={src}
+          alt="Imagem ampliada"
+          onLoad={(e) => {
+            const img = e.currentTarget
+            setWide(img.naturalWidth > img.naturalHeight * 1.3 && window.innerWidth < window.innerHeight)
+          }}
+          style={wide ? { width: '220vw', maxWidth: 'none' } : undefined}
+          className={`rounded-xl bg-white shadow-2xl ${wide ? '' : 'max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)]'}`}
+        />
+      </div>
+      {wide && (
+        <p className="pointer-events-none fixed inset-x-0 bottom-4 text-center text-xs text-white/80">
+          Arraste para ver a figura inteira · toque fora para fechar
+        </p>
+      )}
+    </div>
+  )
+}
 
 function Feedback({
   annulled,
@@ -266,37 +332,37 @@ function Feedback({
   let banner
   if (annulled || isCorrect === null) {
     banner = (
-      <div className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-4">
-        <span className="grid size-9 place-items-center rounded-full bg-ink-1/5 text-ink-2">
+      <div className="flex items-center gap-3.5 rounded-2xl bg-surface-2 px-5 py-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-surface text-ink-2">
           <Icon name="info" />
         </span>
         <div>
-          <p className="font-semibold">Questão anulada pela banca</p>
-          <p className="text-sm text-ink-3">Ela não conta como acerto nem como erro no seu desempenho.</p>
+          <p className="text-[15px] font-bold">Questão anulada pela banca</p>
+          <p className="mt-0.5 text-[13px] text-ink-2">Ela não conta como acerto nem como erro no seu desempenho.</p>
         </div>
       </div>
     )
   } else if (isCorrect) {
     banner = (
-      <div className="flex items-center gap-3 rounded-2xl border border-good/20 bg-good-soft px-5 py-4">
-        <span className="grid size-9 place-items-center rounded-full bg-good text-white">
-          <Icon name="check" />
+      <div className="flex items-center gap-3.5 rounded-2xl bg-good-soft px-5 py-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-good text-on-good">
+          <Icon name="check" className="size-[18px]" />
         </span>
         <div>
-          <p className="font-semibold text-good">Resposta correta!</p>
-          <p className="text-sm text-ink-2">Gabarito oficial: alternativa {correct}.</p>
+          <p className="text-[15px] font-bold text-good">Resposta correta</p>
+          <p className="mt-0.5 text-[13px] text-ink-2">Gabarito oficial: alternativa {correct}.</p>
         </div>
       </div>
     )
   } else {
     banner = (
-      <div className="flex items-center gap-3 rounded-2xl border border-bad/20 bg-bad-soft px-5 py-4">
-        <span className="grid size-9 place-items-center rounded-full bg-bad text-white">
-          <Icon name="x" />
+      <div className="flex items-center gap-3.5 rounded-2xl bg-bad-soft px-5 py-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-bad text-on-bad">
+          <Icon name="x" className="size-[18px]" />
         </span>
         <div>
-          <p className="font-semibold text-bad">Resposta incorreta</p>
-          <p className="text-sm text-ink-2">
+          <p className="text-[15px] font-bold text-bad">Resposta incorreta</p>
+          <p className="mt-0.5 text-[13px] text-ink-2">
             {chosen ? `Você marcou ${chosen}.` : 'Você deixou em branco.'}{' '}
             {correct ? `Gabarito oficial: alternativa ${correct}.` : 'Responda a questão para ver o gabarito.'}
           </p>
@@ -317,7 +383,7 @@ function Feedback({
       {(timeSpentMs != null || reviewText) && (
         <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 text-xs text-ink-3">
           {timeSpentMs != null && (
-            <span className={`inline-flex items-center gap-1.5 ${timeSpentMs / 1000 > SECONDS_PER_QUESTION ? 'text-amber-700' : ''}`}>
+            <span className={`inline-flex items-center gap-1.5 ${timeSpentMs / 1000 > SECONDS_PER_QUESTION ? 'text-warn' : ''}`}>
               <Icon name="clock" className="size-3.5" />
               Você levou {formatDuration(timeSpentMs / 1000)}
               {timeSpentMs / 1000 > SECONDS_PER_QUESTION && ' (acima do ritmo de prova, ~3 min)'}
@@ -332,20 +398,24 @@ function Feedback({
         </div>
       )}
       {explanation && (
-        <Card className="px-5 py-4 sm:px-6">
-          <p className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-brand-700 uppercase">
-            <Icon name="book" className="size-4" /> Comentário da banca
+        <section className="rounded-2xl border border-line bg-surface px-5 py-5 sm:px-6">
+          <p className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[0.06em] text-brand-700 uppercase">
+            <Icon name="book" className="size-[15px]" /> Comentário da banca
           </p>
-          <p className={`text-sm leading-6 text-ink-2 ${long && !expanded ? 'line-clamp-6' : ''}`}>{explanation}</p>
+          <p className={`text-sm leading-[1.7] text-ink-2 ${long && !expanded ? 'line-clamp-6' : ''}`}>{explanation}</p>
           {long && (
             <button type="button" onClick={() => setExpanded((v) => !v)} className="mt-2 text-sm font-semibold text-brand-700">
               {expanded ? 'Mostrar menos' : 'Ler comentário completo'}
             </button>
           )}
-        </Card>
+        </section>
       )}
     </div>
   )
+}
+
+function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="rounded-[5px] border border-line-2 px-1.5 font-sans">{children}</kbd>
 }
 
 const dayFmt = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' })
@@ -369,11 +439,11 @@ function Stopwatch({ clock }: { clock: ReturnType<typeof useStopwatch> }) {
       onClick={clock.toggle}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums transition hover:ring-1 hover:ring-line ${
-        clock.paused ? 'bg-ink-1/5 text-ink-2' : slow ? 'bg-amber-50 text-amber-800' : 'text-ink-3'
+      className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold tabular-nums transition hover:ring-1 hover:ring-line-2 ${
+        slow && !clock.paused ? 'bg-warn-soft text-warn' : 'bg-surface-2 text-ink-2'
       }`}
     >
-      <Icon name={clock.paused ? 'play' : 'pause'} className="size-3.5" />
+      <Icon name={clock.paused ? 'play' : 'pause'} filled className="size-3" />
       {formatDuration(seconds)}
       {clock.paused && ' · pausado'}
     </button>
@@ -405,7 +475,7 @@ function FavoriteButton({ question }: { question: Question }) {
       }}
       aria-pressed={favorite}
       title={favorite ? 'Remover das favoritas' : 'Favoritar para rever depois'}
-      className={`rounded-lg p-1 transition ${favorite ? 'text-amber-500' : 'text-ink-3 hover:text-ink-1'}`}
+      className={`grid size-10 place-items-center rounded-lg transition hover:bg-surface-2 ${favorite ? 'text-warn' : 'text-ink-3 hover:text-ink-1'}`}
     >
       <Icon name="star" filled={favorite} className="size-5" />
     </button>
@@ -422,7 +492,7 @@ function NoteEditor({ question }: { question: Question }) {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-2 px-1 text-sm font-medium text-ink-3 hover:text-ink-1"
+        className="inline-flex min-h-10 items-center gap-2 px-1 text-sm font-medium text-ink-3 hover:text-ink-1"
       >
         <Icon name="pencil" className="size-4" /> Adicionar anotação
       </button>
@@ -433,7 +503,7 @@ function NoteEditor({ question }: { question: Question }) {
     return (
       <Card className="px-5 py-4 sm:px-6">
         <div className="mb-1.5 flex items-center justify-between">
-          <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-amber-700 uppercase">
+          <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-warn uppercase">
             <Icon name="pencil" className="size-4" /> Minha anotação
           </p>
           <button type="button" onClick={() => setEditing(true)} className="text-xs font-semibold text-ink-3 hover:text-ink-1">
@@ -447,7 +517,7 @@ function NoteEditor({ question }: { question: Question }) {
 
   return (
     <Card className="px-5 py-4 sm:px-6">
-      <label className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-amber-700 uppercase">
+      <label className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-warn uppercase">
         <Icon name="pencil" className="size-4" /> Minha anotação
       </label>
       <textarea
@@ -463,10 +533,7 @@ function NoteEditor({ question }: { question: Question }) {
         <Button variant="ghost" onClick={() => setEditing(false)}>
           Cancelar
         </Button>
-        <Button
-          disabled={save.isPending}
-          onClick={() => save.mutate({ note: text }, { onSuccess: () => setEditing(false) })}
-        >
+        <Button disabled={save.isPending} onClick={() => save.mutate({ note: text }, { onSuccess: () => setEditing(false) })}>
           {save.isPending ? 'Salvando…' : 'Salvar'}
         </Button>
       </div>

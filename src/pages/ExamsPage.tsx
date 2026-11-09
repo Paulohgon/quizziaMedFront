@@ -90,7 +90,8 @@ function ExamCard({ exam: e }: { exam: ExamSummary }) {
           target="_blank"
           rel="noreferrer"
           title={e.source_type === 'official' ? 'Caderno oficial (PDF)' : 'Caderno (PDF da Medway)'}
-          className="rounded-xl border border-line p-2.5 text-ink-3 hover:bg-canvas hover:text-ink-1"
+          aria-label={e.source_type === 'official' ? 'Abrir o caderno oficial (PDF)' : 'Abrir o caderno (PDF da Medway)'}
+          className="grid size-11 place-items-center rounded-xl border border-line text-ink-3 hover:bg-canvas hover:text-ink-1"
         >
           <Icon name="external" className="size-4" />
         </a>

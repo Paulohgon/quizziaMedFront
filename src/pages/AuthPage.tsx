@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { api, ApiError } from '../api'
 import { useAuth } from '../auth'
-import { Logo } from '../components/Layout'
+import { Logo, LogoMark } from '../components/Layout'
 import { Button, Icon } from '../components/ui'
 
 const FEATURES = [
@@ -11,6 +11,10 @@ const FEATURES = [
   'Refaça só o que errou, sem ver a resposta antes',
   'Desempenho por área, por prova e por região',
 ]
+
+const INPUT =
+  'h-[46px] w-full rounded-xl border border-line-2 bg-surface px-3.5 text-[15px] font-normal text-ink-1 outline-none placeholder:text-ink-3 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15'
+const LABEL = 'flex flex-col gap-1.5 text-[13px] font-semibold text-ink-2'
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { user, login, register, verifyEmail } = useAuth()
@@ -44,113 +48,125 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     }
   }
 
-  const input =
-    'w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm outline-none placeholder:text-ink-3 focus:border-brand-400 focus:ring-4 focus:ring-brand-100'
+  const tab = (active: boolean) =>
+    `grid h-10 place-items-center rounded-[9px] text-sm font-semibold transition ${
+      active ? 'bg-surface text-ink-1 shadow-sm' : 'text-ink-3 hover:text-ink-1'
+    }`
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden bg-brand-900 p-12 text-white lg:flex lg:flex-col">
-        <div className="absolute -top-24 -right-24 size-96 rounded-full bg-brand-600/40 blur-3xl" />
-        <div className="absolute -bottom-32 -left-16 size-96 rounded-full bg-brand-400/20 blur-3xl" />
-        <div className="relative flex items-center gap-2 font-display text-xl font-extrabold">
-          <span className="grid size-8 place-items-center rounded-xl bg-white/15">
-            <Icon name="sparkle" className="size-4" />
+    <div className="flex min-h-screen bg-canvas">
+      <section className="hidden flex-1 flex-col gap-12 border-r border-panel-line bg-panel px-16 py-14 text-panel-ink lg:flex">
+        <span className="inline-flex items-center gap-3 font-display text-2xl tracking-tight">
+          <LogoMark tone="panel" className="size-11" />
+          <span>
+            <span className="font-extrabold text-white">Quizzia</span>{' '}
+            <span className="font-semibold text-panel-accent">Med</span>
           </span>
-          medingo
-        </div>
-        <div className="relative my-auto max-w-md">
-          <h1 className="font-display text-4xl leading-tight font-extrabold">
-            Treine com provas reais de residência médica.
+        </span>
+
+        <div className="mt-auto flex max-w-[460px] flex-col gap-7">
+          <h1 className="text-[40px] leading-[1.15] font-extrabold tracking-[-0.03em] text-white">
+            Treine para a residência com questões de prova de verdade.
           </h1>
-          <ul className="mt-8 space-y-4">
+          <ul className="flex flex-col gap-3.5">
             {FEATURES.map((f) => (
-              <li key={f} className="flex items-start gap-3 text-brand-50">
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-brand-400/30">
-                  <Icon name="check" className="size-3" />
+              <li key={f} className="flex items-start gap-3 text-[15px] leading-normal">
+                <span className="grid size-[22px] shrink-0 place-items-center rounded-full bg-panel-accent/15 text-panel-accent">
+                  <Icon name="check" className="size-[13px]" />
                 </span>
                 {f}
               </li>
             ))}
           </ul>
         </div>
-      </div>
+        <p className="text-[13px] text-panel-muted">Feito para quem estuda para a residência médica.</p>
+      </section>
 
-      <div className="flex items-center justify-center px-4 py-12 sm:px-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
+      <section className="flex flex-1 items-center justify-center px-6 py-14">
+        <div className="flex w-full max-w-[400px] flex-col gap-7">
+          <div className="lg:hidden">
             <Logo />
           </div>
+
           {verifying ? (
             <VerifyStep
               email={verifying}
-              onVerify={(code) => verifyEmail(verifying, code)}
+              onVerify={(code) => verifyEmail(verifying, code, password)}
               onBack={() => setVerifying(null)}
             />
           ) : (
             <>
-              <h2 className="text-2xl font-extrabold">{mode === 'login' ? 'Entrar' : 'Criar conta'}</h2>
-              <p className="mt-1 text-sm text-ink-3">
-                {mode === 'login' ? 'Bom te ver de novo.' : 'Leva menos de um minuto.'}
-              </p>
+              <nav aria-label="Entrar ou criar conta" className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
+                <Link to="/entrar" state={location.state} aria-current={mode === 'login' ? 'page' : undefined} className={tab(mode === 'login')}>
+                  Entrar
+                </Link>
+                <Link
+                  to="/cadastro"
+                  state={location.state}
+                  aria-current={mode === 'register' ? 'page' : undefined}
+                  className={tab(mode === 'register')}
+                >
+                  Criar conta
+                </Link>
+              </nav>
 
-              <form onSubmit={submit} className="mt-8 space-y-4">
+              <div>
+                <h2 className="text-[28px] font-extrabold">{mode === 'login' ? 'Entrar' : 'Criar conta'}</h2>
+                <p className="mt-1.5 text-[15px] text-ink-3">
+                  {mode === 'login' ? 'Bom te ver de novo.' : 'Leva menos de um minuto.'}
+                </p>
+              </div>
+
+              <form onSubmit={submit} className="flex flex-col gap-4">
                 {mode === 'register' && (
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium">Nome</span>
-                    <input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} className={input} autoComplete="name" />
+                  <label className={LABEL}>
+                    Nome
+                    <input
+                      required
+                      minLength={2}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={INPUT}
+                      placeholder="Seu nome"
+                      autoComplete="name"
+                    />
                   </label>
                 )}
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium">E-mail</span>
+                <label className={LABEL}>
+                  E-mail
                   <input
                     required
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={input}
+                    className={INPUT}
+                    placeholder="voce@email.com"
                     autoComplete="email"
                   />
                 </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium">Senha</span>
+                <label className={LABEL}>
+                  Senha
                   <input
                     required
                     type="password"
                     minLength={mode === 'register' ? 6 : undefined}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className={input}
+                    className={INPUT}
+                    placeholder="••••••••"
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   />
-                  {mode === 'register' && <span className="mt-1 block text-xs text-ink-3">Mínimo de 6 caracteres.</span>}
+                  {mode === 'register' && <span className="text-xs font-normal text-ink-3">Mínimo de 6 caracteres.</span>}
                 </label>
                 {error && <p className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
-                <Button type="submit" disabled={pending} className="w-full py-3">
+                <Button type="submit" disabled={pending} className="mt-2 h-12 w-full text-[15px]">
                   {pending ? 'Aguarde…' : mode === 'login' ? 'Entrar' : 'Criar conta'}
                 </Button>
               </form>
-
-              <p className="mt-6 text-center text-sm text-ink-3">
-                {mode === 'login' ? (
-                  <>
-                    Ainda não tem conta?{' '}
-                    <Link to="/cadastro" state={location.state} className="font-semibold text-brand-700 hover:underline">
-                      Cadastre-se
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    Já tem conta?{' '}
-                    <Link to="/entrar" state={location.state} className="font-semibold text-brand-700 hover:underline">
-                      Entrar
-                    </Link>
-                  </>
-                )}
-              </p>
             </>
           )}
         </div>
-      </div>
+      </section>
     </div>
   )
 }
@@ -205,16 +221,18 @@ function VerifyStep({
   }
 
   return (
-    <>
-      <h2 className="text-2xl font-extrabold">Confirme seu e-mail</h2>
-      <p className="mt-1 text-sm text-ink-3">
-        Enviamos um código de 6 dígitos para <span className="font-semibold text-ink-1">{email}</span>. Confira também a
-        caixa de spam.
-      </p>
+    <div className="flex flex-col gap-7">
+      <div>
+        <h2 className="text-[28px] font-extrabold">Confirme seu e-mail</h2>
+        <p className="mt-1.5 text-[15px] text-ink-3">
+          Enviamos um código de 6 dígitos para <span className="font-semibold text-ink-1">{email}</span>. Confira
+          também a caixa de spam.
+        </p>
+      </div>
 
-      <form onSubmit={submit} className="mt-8 space-y-4">
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Código</span>
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <label className={LABEL}>
+          Código
           <input
             required
             autoFocus
@@ -224,18 +242,18 @@ function VerifyStep({
             maxLength={6}
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            className="w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-center font-mono text-2xl tracking-[0.5em] outline-none placeholder:text-ink-3 focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
+            className={`${INPUT} h-14 text-center font-mono text-2xl tracking-[0.5em]`}
             placeholder="000000"
           />
         </label>
         {error && <p className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>}
         {notice && !error && <p className="text-sm text-ink-3">{notice}</p>}
-        <Button type="submit" disabled={pending || code.length !== 6} className="w-full py-3">
+        <Button type="submit" disabled={pending || code.length !== 6} className="mt-2 h-12 w-full text-[15px]">
           {pending ? 'Aguarde…' : 'Confirmar'}
         </Button>
       </form>
 
-      <div className="mt-6 flex items-center justify-between text-sm">
+      <div className="flex items-center justify-between text-sm">
         <button type="button" onClick={onBack} className="text-ink-3 hover:underline">
           Voltar
         </button>
@@ -248,6 +266,6 @@ function VerifyStep({
           {cooldown > 0 ? `Reenviar em ${cooldown}s` : 'Reenviar código'}
         </button>
       </div>
-    </>
+    </div>
   )
 }

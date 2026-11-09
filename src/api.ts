@@ -171,6 +171,19 @@ export interface AttemptIn {
   answers: { question_id: number; chosen: Letter; time_spent_ms: number | null }[]
   time_limit_s: number | null
   duration_s: number
+  /** Prova: revisão do progresso que esta aba conhece (409 se outra aba mudou ou já entregou). */
+  progress_rev?: string | null
+  /** Chave desta prova/simulado: reenviar a mesma entrega não duplica (409 na segunda). */
+  client_key?: string | null
+}
+
+/** Identificador aleatório (crypto.randomUUID só existe em HTTPS/localhost). */
+export function newKey(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+  }
 }
 
 export interface AttemptResult {
@@ -185,6 +198,8 @@ export interface ExamProgress {
   current: number
   elapsed_ms: number
   time_per_question: Record<number, number>
+  /** Revisão no servidor; muda a cada gravação (null = ainda não gravado). */
+  rev?: string | null
 }
 
 export type QuestionStatus = 'all' | 'unanswered' | 'answered' | 'correct' | 'wrong' | 'review'
@@ -248,8 +263,8 @@ async function request<T>(path: string, init: RequestInit = {}, params?: URLSear
 export const api = {
   register: (name: string, email: string, password: string) =>
     request<VerificationPending>('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) }),
-  verifyEmail: (email: string, code: string) =>
-    request<AuthResponse>('/api/auth/verify', { method: 'POST', body: JSON.stringify({ email, code }) }),
+  verifyEmail: (email: string, code: string, password: string) =>
+    request<AuthResponse>('/api/auth/verify', { method: 'POST', body: JSON.stringify({ email, code, password }) }),
   resendCode: (email: string) =>
     request<void>('/api/auth/resend-code', { method: 'POST', body: JSON.stringify({ email }) }),
   login: (email: string, password: string) =>

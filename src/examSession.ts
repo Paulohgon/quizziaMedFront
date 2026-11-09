@@ -8,6 +8,8 @@ import type { ExamProgress, Question } from './api'
 export interface SavedSimulado {
   questions: Question[]
   timeLimitS: number | null
+  /** Chave da entrega (ver AttemptIn.client_key); salva junto para valer também depois de recarregar. */
+  key?: string
 }
 
 const SIMULADO_KEY = 'medingo:simulado'
